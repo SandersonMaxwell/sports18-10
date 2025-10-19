@@ -3,11 +3,11 @@ import pandas as pd
 from io import BytesIO
 
 st.set_page_config(page_title="Limpeza de Planilhas", layout="wide")
-st.title("🧹 Limpeza de Dados - Bet Analysis Consolidado")
+st.title("🧹 Limpeza de Dados - Consolidado de Client ID e Eventos")
 
 st.write("""
 Suba **3 planilhas de uma vez**, contendo as colunas:
-**Bet Amount**, **Payout**, **Client ID**, **Event** e **Final Score**.
+**Client ID** e **Event**.
 O sistema vai gerar uma tabela consolidada mostrando em quais **eventos** cada Client ID aparece.
 """)
 
@@ -16,17 +16,6 @@ uploaded_files = st.file_uploader("Selecione as 3 planilhas", type=["csv", "xlsx
 if uploaded_files and len(uploaded_files) == 3:
     dfs = []
     client_events = {}
-
-    # Função para formatar valor em BRL
-    def format_brl(value):
-        try:
-            value = float(value)
-            # Se o valor for > 1000 e inteiro, dividir por 100 para ajustar
-            if value > 1000 and value == int(value):
-                value /= 100
-            return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        except:
-            return value
 
     # Processa cada planilha
     for file in uploaded_files:
@@ -38,24 +27,18 @@ if uploaded_files and len(uploaded_files) == 3:
         # Padroniza nomes das colunas
         df.columns = df.columns.str.strip().str.lower()
 
-        # Mantém apenas as colunas desejadas
-        expected_cols = ["bet amount", "payout", "client id", "event", "final score"]
+        # Mantém apenas Client ID e Event
+        expected_cols = ["client id", "event"]
         df = df[[col for col in expected_cols if col in df.columns]]
 
-        # Limpa Client ID
+        # Limpa Client ID (remove vírgulas e espaços)
         if "client id" in df.columns:
             df["client id"] = df["client id"].astype(str).str.replace(",", "").str.strip()
 
-        # Preenche valores vazios da coluna event
+        # Preenche valores vazios da coluna Event
         if "event" in df.columns:
             main_event = df["event"].dropna().iloc[0] if not df["event"].dropna().empty else "Evento Desconhecido"
             df["event"] = df["event"].fillna(main_event)
-
-        # Formata Bet Amount e Payout
-        if "bet amount" in df.columns:
-            df["bet amount"] = df["bet amount"].apply(format_brl)
-        if "payout" in df.columns:
-            df["payout"] = df["payout"].apply(format_brl)
 
         # Armazena eventos para cada Client ID
         for idx, row in df.iterrows():
@@ -71,12 +54,15 @@ if uploaded_files and len(uploaded_files) == 3:
     combined_df = pd.concat(dfs, ignore_index=True)
 
     # Cria coluna Planilhas (com os eventos)
-    combined_df["Planilhas"] = combined_df["client id"].apply(lambda x: ", ".join(sorted(client_events[x])))
+    combined_df["Eventos"] = combined_df["client id"].apply(lambda x: ", ".join(sorted(client_events[x])))
+
+    # Remove duplicados para ter apenas uma linha por Client ID
+    combined_df = combined_df.drop_duplicates(subset=["client id"]).reset_index(drop=True)
 
     # Ordena por Client ID
-    combined_df = combined_df.sort_values(by="client id").reset_index(drop=True)
+    combined_df = combined_df.sort_values(by="client id")
 
-    st.subheader("✅ Tabela Consolidada com Eventos e Valores BRL")
+    st.subheader("✅ Tabela Consolidada de Client ID e Eventos")
     st.dataframe(combined_df, use_container_width=True)
 
     # CSV para download
@@ -86,7 +72,7 @@ if uploaded_files and len(uploaded_files) == 3:
     st.download_button(
         label="📥 Baixar CSV Consolidado",
         data=csv_buffer,
-        file_name="tabela_consolidada_eventos_brl.csv",
+        file_name="tabela_consolidada_client_id_eventos.csv",
         mime="text/csv"
     )
 
