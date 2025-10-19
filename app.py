@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 
-st.set_page_config(page_title="Limpeza de Planilhas", layout="wide")
-st.title("🧹 Limpeza de Dados - Consolidado de Client ID e Eventos")
+st.set_page_config(page_title="Consolidado Client ID", layout="wide")
+st.title("🧹 Consolidado de Client ID por Eventos")
 
 st.write("""
 Suba **3 planilhas de uma vez**, contendo as colunas:
@@ -14,7 +14,6 @@ O sistema vai gerar uma tabela consolidada mostrando em quais **eventos** cada C
 uploaded_files = st.file_uploader("Selecione as 3 planilhas", type=["csv", "xlsx"], accept_multiple_files=True)
 
 if uploaded_files and len(uploaded_files) == 3:
-    dfs = []
     client_events = {}
 
     # Processa cada planilha
@@ -31,16 +30,14 @@ if uploaded_files and len(uploaded_files) == 3:
         expected_cols = ["client id", "event"]
         df = df[[col for col in expected_cols if col in df.columns]]
 
-        # Limpa Client ID (remove vírgulas e espaços)
-        if "client id" in df.columns:
-            df["client id"] = df["client id"].astype(str).str.replace(",", "").str.strip()
+        # Limpa Client ID
+        df["client id"] = df["client id"].astype(str).str.replace(",", "").str.strip()
 
-        # Preenche valores vazios da coluna Event
-        if "event" in df.columns:
-            main_event = df["event"].dropna().iloc[0] if not df["event"].dropna().empty else "Evento Desconhecido"
-            df["event"] = df["event"].fillna(main_event)
+        # Preenche valores vazios de Event
+        main_event = df["event"].dropna().iloc[0] if not df["event"].dropna().empty else "Evento Desconhecido"
+        df["event"] = df["event"].fillna(main_event)
 
-        # Armazena eventos para cada Client ID
+        # Armazena eventos por Client ID
         for idx, row in df.iterrows():
             cid = row["client id"]
             evt = row["event"]
@@ -48,31 +45,26 @@ if uploaded_files and len(uploaded_files) == 3:
                 client_events[cid] = set()
             client_events[cid].add(evt)
 
-        dfs.append(df)
-
-    # Concatena todas as planilhas
-    combined_df = pd.concat(dfs, ignore_index=True)
-
-    # Cria coluna Planilhas (com os eventos)
-    combined_df["Eventos"] = combined_df["client id"].apply(lambda x: ", ".join(sorted(client_events[x])))
-
-    # Remove duplicados para ter apenas uma linha por Client ID
-    combined_df = combined_df.drop_duplicates(subset=["client id"]).reset_index(drop=True)
+    # Cria tabela final
+    final_df = pd.DataFrame({
+        "Client ID": list(client_events.keys()),
+        "Eventos": [", ".join(sorted(evts)) for evts in client_events.values()]
+    })
 
     # Ordena por Client ID
-    combined_df = combined_df.sort_values(by="client id")
+    final_df = final_df.sort_values(by="Client ID").reset_index(drop=True)
 
-    st.subheader("✅ Tabela Consolidada de Client ID e Eventos")
-    st.dataframe(combined_df, use_container_width=True)
+    st.subheader("✅ Tabela Consolidada de Client ID")
+    st.dataframe(final_df, use_container_width=True)
 
     # CSV para download
     csv_buffer = BytesIO()
-    combined_df.to_csv(csv_buffer, index=False)
+    final_df.to_csv(csv_buffer, index=False)
     csv_buffer.seek(0)
     st.download_button(
         label="📥 Baixar CSV Consolidado",
         data=csv_buffer,
-        file_name="tabela_consolidada_client_id_eventos.csv",
+        file_name="tabela_consolidada_client_id.csv",
         mime="text/csv"
     )
 
